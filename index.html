@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Галерея</title>
+
+<script src="https://unpkg.com/fflate@0.8.2/umd/index.js"></script>
+
+<style>
+body {
+  margin: 0;
+  padding: 1cm;
+  font-family: system-ui, sans-serif;
+  background: #fff;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+button {
+  padding: 0.6em 1.2em;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+/* Крупный баннер предупреждения */
+.expiry-banner {
+  margin: 0.5cm 0 0.8cm 0;
+  padding: 14px 18px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #ffcc00, #ff9900);
+  color: #000;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.15);
+}
+
+.expiry-banner .text {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.expiry-banner .timer {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace;
+  font-size: 18px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Галерея */
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.25cm;
+}
+
+.gallery img {
+  width: 100%;
+  height: auto;
+  background: #f2f2f2;
+}
+
+/* Модалка */
+#modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+#modalContent {
+  background: white;
+  padding: 1.2cm;
+  width: 300px;
+  text-align: center;
+  border-radius: 6px;
+}
+
+progress {
+  width: 100%;
+  height: 18px;
+}
+
+/* Мобильная адаптация */
+@media (max-width: 480px) {
+  .expiry-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .expiry-banner .timer {
+    font-size: 16px;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>Галерея</h1>
+  <button onclick="skachatZip()">Скачать всё</button>
+</header>
+
+<div class="expiry-banner" id="expiryBanner">
+  <div class="text">
+    ⚠️ Этот сайт временный и будет удалён <b>20 февраля 2026 в 00:00 (UTC)</b>
+  </div>
+  <div class="timer" id="countdownTimer">--:--:--</div>
+</div>
+
+<div class="gallery" id="galleryContainer"></div>
+
+<div id="modal">
+  <div id="modalContent">
+    <p id="status">Подготовка...</p>
+    <progress id="progress" value="0" max="100"></progress>
+  </div>
+</div>
+
+<script>
+const spisokFailov = [];
+const bazoviyUrl = 'https://raw.githubusercontent.com/ruslan/refs/heads/main/pics/';
+const containerGalerei = document.getElementById('galleryContainer');
+
+for (let i = 1; i <= 38; i++) {
+  let imyaFaila = `${i}.jpg`;
+
+  if (i >= 35 && i <= 38) {
+    imyaFaila = `${i}.png`;
+  }
+
+  spisokFailov.push({
+    name: imyaFaila,
+    url: bazoviyUrl + imyaFaila
+  });
+
+  const img = document.createElement('img');
+  img.src = bazoviyUrl + imyaFaila;
+  img.loading = "lazy";
+  containerGalerei.appendChild(img);
+}
+
+const modal = document.getElementById("modal");
+const progress = document.getElementById("progress");
+const statusText = document.getElementById("status");
+
+async function skachatZip() {
+  try {
+    modal.style.display = "flex";
+    progress.value = 0;
+    statusText.textContent = "Загрузка файлов...";
+
+    await new Promise(r => requestAnimationFrame(r));
+
+    const dannyeDlyaZip = {};
+    let zagruzheno = 0;
+
+    await Promise.all(spisokFailov.map(async (fail) => {
+      const otvet = await fetch(fail.url);
+      if (!otvet.ok) throw new Error(`Ошибка загрузки ${fail.name}`);
+
+      const buffer = new Uint8Array(await otvet.arrayBuffer());
+      dannyeDlyaZip[fail.name] = buffer;
+
+      zagruzheno++;
+      progress.value = Math.round((zagruzheno / spisokFailov.length) * 70);
+    }));
+
+    statusText.textContent = "Упаковка архива...";
+    await new Promise(r => setTimeout(r, 100));
+
+    const zipArhiv = fflate.zipSync(dannyeDlyaZip, { level: 6 });
+    progress.value = 90;
+
+    const blob = new Blob([zipArhiv], { type: "application/zip" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "images.zip";
+    a.click();
+
+    URL.revokeObjectURL(url);
+
+    progress.value = 100;
+    statusText.textContent = "Готово!";
+
+    setTimeout(() => modal.style.display = "none", 1500);
+
+  } catch (error) {
+    console.error(error);
+    statusText.textContent = "Ошибка!";
+    alert("Ошибка при скачивании. Проверь консоль.");
+    setTimeout(() => modal.style.display = "none", 2000);
+  }
+}
+
+(function () {
+  const targetUtc = Date.UTC(2026, 1, 20, 0, 0, 0); // февраль = 1
+  const timer = document.getElementById('countdownTimer');
+
+  function pad(n) {
+    return String(n).padStart(2, '0');
+  }
+
+  function update() {
+    const diff = targetUtc - Date.now();
+
+    if (diff <= 0) {
+      timer.textContent = 'Срок истёк';
+      return;
+    }
+
+    const total = Math.floor(diff / 1000);
+    const days = Math.floor(total / 86400);
+    const hours = Math.floor((total % 86400) / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const seconds = total % 60;
+
+    timer.textContent =
+      days > 0
+        ? `${days}д ${pad(hours)}:${pad(minutes)}:${pad(seconds)}`
+        : `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  }
+
+  update();
+  setInterval(update, 1000);
+})();
+</script>
+
+</body>
+</html>
